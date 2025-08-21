@@ -1,33 +1,32 @@
-# VotingSystem Contract with Semaphore ZK-Proof Voting
+# VotingSystem Contract
 
 ## Overview
 
-This smart contract enables decentralized proposal creation, voting, and execution using two methods:
+This smart contract enables decentralized proposal creation, voting, and execution using ERC20 token-based voting.
 
-- **Classic ERC20 token voting**: Votes are weighted by token balance.
-- **Anonymous zk-SNARK voting**: Using Semaphore, voters can cast votes anonymously, Sybil-resistant, and privacy-preserving.
+- **ERC20 token voting**: Votes are weighted by token balance or user-specified weight.
 
-It is designed for governance systems, DAOs, or any scenario where both transparent and privacy-focused voting are required.
+It is designed for governance systems, DAOs, or any scenario where transparent, token-based voting is required.
 
 ---
 
 ## Features
 
 - **Create Proposals**: Only the contract owner can create proposals with multiple options and a voting time window.
-- **Classic Voting**: Users vote with ERC20 tokens, weighted by their balance or a provided weight.
-- **ZK-Proof Voting**: Anyone with a valid Semaphore zk-SNARK proof can vote anonymously. Double voting is prevented by nullifier hashes.
+- **Token-Based Voting**: Users vote with ERC20 tokens, weighted by their balance or a provided weight.
 - **Result Calculation**: After voting ends, anyone can view results, including winner(s), vote counts, tie status, and quorum checks.
 - **Proposal Execution**: After the voting and timelock period, the proposal creator can execute the proposal.
-- **Security**: Uses OpenZeppelin's Ownable for access control, and prevents double-voting via mappings.
+- **Security**: Uses OpenZeppelin's Ownable for access control, ReentrancyGuard for security, and prevents double-voting.
+- **Admin Controls**: Pause/unpause functionality and parameter updates.
 
 ---
 
 ## Contract Architecture
 
-- **Semaphore Integration**: The contract imports Semaphore's verifier and checks off-chain generated zk-SNARK proofs.
 - **Proposal Struct**: Each proposal tracks options, votes per option, creator, timing, and execution status.
-- **Voter Struct**: Classic voting records if a user has voted, their weight, and chosen option.
-- **Nullifier Hashes**: Used in ZK voting to prevent double voting.
+- **Voter Struct**: Records if a user has voted, their weight, and chosen option.
+- **Result Storage**: Permanent storage of calculated results for each proposal.
+- **Event System**: Comprehensive logging for frontend integration.
 
 ---
 
@@ -35,9 +34,8 @@ It is designed for governance systems, DAOs, or any scenario where both transpar
 
 ### Prerequisites
 
-- Solidity ^0.8.0
+- Solidity ^0.8.20
 - OpenZeppelin Contracts
-- Semaphore Verifier contract
 - ERC20 token contract
 - [Hardhat](https://hardhat.org/), [Foundry](https://book.getfoundry.sh/), or [Remix IDE](https://remix.ethereum.org/)
 
@@ -47,16 +45,14 @@ It is designed for governance systems, DAOs, or any scenario where both transpar
 
    ```bash
    npm install @openzeppelin/contracts
-   # Add Semaphore.sol to your contracts folder (get from Semaphore repo)
    ```
 
-2. **Deploy Semaphore contract**:
+2. **Deploy ERC20 token contract**:
 
-   - Use the Semaphore repo: [https://github.com/semaphore-protocol/semaphore](https://github.com/semaphore-protocol/semaphore)
-   - Deploy `Semaphore.sol` on your local testnet.
+   - Use any standard ERC20 token
 
 3. **Deploy VotingSystem contract**:
-   - Pass the deployed ERC20 token address and Semaphore contract address to the constructor.
+   - Pass the deployed ERC20 token address to the constructor.
 
 ---
 
@@ -76,9 +72,9 @@ createProposal(
 - **description**: Proposal summary.
 - **startTime**: Unix timestamp when voting starts.
 - **endTime**: Unix timestamp when voting ends.
-- **options**: Array of option IDs (e.g., candidate numbers).
+- **options**: Array of option IDs (e.g., [1, 2, 3] for three choices).
 
-### 2. Classic Voting (ERC20)
+### 2. Token-Based Voting
 
 ```solidity
 vote(
@@ -89,32 +85,21 @@ vote(
 ```
 
 - User must have at least `minBalance` of the ERC20 token.
-- Vote weight can be set or defaults to full balance.
+- Vote weight can be set manually or defaults to full balance.
+- Weight cannot exceed user's token balance.
 
-### 3. ZK-Proof Voting (Semaphore)
+### 3. Calculate Results
 
 ```solidity
-zkVote(
-  uint256 proposalId,
-  uint256 option,
-  uint256 merkleRoot,
-  uint256 nullifierHash,
-  uint256 externalNullifier,
-  uint256[8] calldata proof
-)
+calculateResults(proposalId)
 ```
 
-- **merkleRoot**: Semaphore group Merkle tree root.
-- **nullifierHash**: Prevents double voting.
-- **externalNullifier**: Used to scope a voting session.
-- **proof**: zk-SNARK proof array (generated off-chain via Semaphore).
+Must be called after voting ends to compute and store results.
 
-> **Note:** Proofs must be generated off-chain using Semaphore tools. See [Semaphore Docs](https://docs.semaphore.appliedzkp.org/) and [Semaphore playground](https://semaphore.appliedzkp.org/).
-
-### 4. View Proposal Result
+### 4. View Proposal Results
 
 ```solidity
-proposalResult(proposalId)
+getProposalResults(proposalId)
 ```
 
 Returns tuple:
@@ -124,7 +109,8 @@ Returns tuple:
 - `totalVotes`
 - `tie` (bool)
 - `noVotes` (bool)
-- `thresholdMet` (bool)
+- `thresholdMet` (bool - requires >50%)
+- `quorumMet` (bool)
 
 ### 5. Execute Proposal
 
@@ -133,55 +119,106 @@ executeProposal(proposalId)
 ```
 
 - Only creator can execute after voting and timelock.
+- Requires quorum met, threshold met, no tie, and votes cast.
 - Emits `ProposalExecuted`.
+
+---
+
+## View Functions
+
+- `getProposal(proposalId)`: Get proposal details
+- `getVoteCount(proposalId, option)`: Get votes for specific option
+- `getVoterInfo(proposalId, voter)`: Get voter's voting details
+- `getNextProposalId()`: Get next proposal ID
+- `getTotalProposals()`: Get total number of proposals
+
+---
+
+## Admin Functions
+
+- `pause() / unpause()`: Emergency stop functionality
+- `setQuorum(uint256)`: Update quorum requirement
+- `setMinBalance(uint256)`: Update minimum token balance
+- `setTimeLockDuration(uint256)`: Update execution timelock
 
 ---
 
 ## Events
 
 - `ProposalCreated`: Proposal is created.
-- `VoteCast`: Classic vote cast.
-- `VoteCastZK`: ZK vote cast.
-- `ProposalResult`: Results are computed.
+- `VoteCast`: Vote is cast.
+- `ProposalResultCalculated`: Results are computed and stored.
 - `ProposalExecuted`: Proposal is executed.
 
 ---
 
 ## Example Workflow
 
-1. **Owner** deploys ERC20 token, Semaphore, and VotingSystem contracts.
-2. **Owner** creates a proposal.
-3. **Voters** choose classic or ZK voting:
-   - Classic: Call `vote()` with tokens.
-   - ZK: Generate Semaphore proof off-chain, call `zkVote()`.
-4. **Anyone** can view results after voting ends.
-5. **Creator** executes proposal after timelock.
+1. **Owner** deploys ERC20 token and VotingSystem contracts.
+2. **Owner** creates a proposal with multiple options.
+3. **Voters** call `vote()` with their tokens during the voting period.
+4. **Anyone** calls `calculateResults()` after voting ends.
+5. **Anyone** can view results using `getProposalResults()`.
+6. **Creator** executes proposal after timelock period if requirements are met.
 
 ---
 
-## Advanced/Customization Ideas
+## Configuration Parameters
 
-- Add group management (on-chain membership, Merkle root updates).
-- Weighted ZK voting.
-- Frontend for easy proposal creation, voting, and proof generation.
-- Automated tests for both voting types.
+- **minBalance**: Minimum token balance required to vote
+- **quorum**: Minimum total votes required for valid proposal
+- **timeLockDuration**: Delay between voting end and execution (default: 60 seconds)
+- **Threshold**: Winner must have >50% of total votes
 
 ---
 
-## Security Considerations
+## Security Features
 
-- Ensure Semaphore contract is deployed and referenced correctly.
-- Off-chain proof generation must use the correct group and external nullifier.
-- Classic voting requires sufficient ERC20 token balance.
-- Prevents double voting in both systems.
+- **ReentrancyGuard**: Prevents reentrancy attacks
+- **Pausable**: Emergency stop functionality
+- **Access Control**: Owner-only proposal creation
+- **Double Voting Prevention**: Users can only vote once per proposal
+- **Input Validation**: Comprehensive parameter checking
+- **Timelock**: Delay between voting and execution
+
+---
+
+## Testing
+
+Run the comprehensive test suite:
+
+```bash
+npx hardhat test
+```
+
+Tests cover:
+
+- Proposal creation and validation
+- Voting mechanics and weight calculation
+- Double voting prevention
+- Result calculation accuracy
+- Proposal execution requirements
+- Admin functionality
+- Security features
+
+---
+
+## Deployment
+
+```bash
+# Local deployment
+npx hardhat run scripts/deploy.js
+
+# Testnet deployment
+npx hardhat run scripts/deploy.js --network goerli
+```
 
 ---
 
 ## References
 
-- [Semaphore Protocol](https://semaphore.appliedzkp.org/)
-- [Semaphore GitHub](https://github.com/semaphore-protocol/semaphore)
 - [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts)
+- [Hardhat Documentation](https://hardhat.org/)
 
 ---
 

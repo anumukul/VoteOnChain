@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
-
-import "./Semaphore.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
-    Semaphore public semaphore;
-
     struct Proposal {
         uint256 id;
         string description;
@@ -45,11 +41,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     uint256 public quorum;
     uint256 public timeLockDuration = 60;
 
-    // ZK voting configuration
-    uint256 public zkVotingWeight = 1000; // Make ZK votes equivalent to 1000 tokens
-    mapping(uint256 => bool) public validMerkleRoots;
-    mapping(uint256 => bool) public nullifierHashes;
-
     uint256 private nextProposalId = 1;
     mapping(uint256 => Proposal) proposals;
     mapping(uint256 => mapping(address => Voter)) public votes;
@@ -72,13 +63,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 votedOption
     );
 
-    event VoteCastZK(
-        uint256 indexed id,
-        uint256 nullifierHash,
-        uint256 votedOption,
-        uint256 weight
-    );
-
     event ProposalResultCalculated(
         uint256 indexed proposalId,
         uint256[] winners,
@@ -96,40 +80,17 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         bool success
     );
 
-    event MerkleRootAdded(uint256 indexed merkleRoot);
-    event MerkleRootRemoved(uint256 indexed merkleRoot);
-
     constructor(
         address _token,
         uint256 _minBalance,
-        uint256 _quorum,
-        address semaphoreAddress
-    ) Ownable(msg.sender) {
+        uint256 _quorum
+    ) Ownable() {
         require(_token != address(0), "Invalid token address");
-        require(semaphoreAddress != address(0), "Invalid semaphore address");
         require(_quorum > 0, "Quorum must be greater than 0");
 
         votingToken = IERC20(_token);
         minBalance = _minBalance;
         quorum = _quorum;
-        semaphore = Semaphore(semaphoreAddress);
-    }
-
-    // Semaphore group management
-    function addMerkleRoot(uint256 merkleRoot) external onlyOwner {
-        require(merkleRoot != 0, "Invalid merkle root");
-        validMerkleRoots[merkleRoot] = true;
-        emit MerkleRootAdded(merkleRoot);
-    }
-
-    function removeMerkleRoot(uint256 merkleRoot) external onlyOwner {
-        validMerkleRoots[merkleRoot] = false;
-        emit MerkleRootRemoved(merkleRoot);
-    }
-
-    function setZkVotingWeight(uint256 _zkVotingWeight) external onlyOwner {
-        require(_zkVotingWeight > 0, "ZK voting weight must be greater than 0");
-        zkVotingWeight = _zkVotingWeight;
     }
 
     function createProposal(
@@ -137,7 +98,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 startTime,
         uint256 endTime,
         uint256[] memory options
-    ) external onlyOwner {
+    ) external  {
         require(bytes(description).length > 0, "Description is required");
         require(
             startTime > block.timestamp,
@@ -146,7 +107,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         require(endTime > startTime, "End time must be after start time");
         require(options.length >= 2, "At least two options required");
 
-        // Validate options are unique
         for (uint i = 0; i < options.length; i++) {
             for (uint j = i + 1; j < options.length; j++) {
                 require(
@@ -213,7 +173,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 voterBalance = votingToken.balanceOf(msg.sender);
         require(voterBalance >= minBalance, "Insufficient token balance");
 
-        // Fixed vote weight calculation
         uint256 voteWeight;
         if (weight > 0) {
             require(weight <= voterBalance, "Weight exceeds token balance");
@@ -230,45 +189,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         voterRecords[msg.sender] += 1;
 
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
-    }
-
-    function zkVote(
-        uint256 proposalId,
-        uint256 option,
-        uint256 merkleRoot,
-        uint256 nullifierHash,
-        uint256 externalNullifier,
-        uint256[8] calldata proof
-    ) external nonReentrant whenNotPaused {
-        Proposal storage p = proposals[proposalId];
-
-        require(p.startTime > 0, "Proposal does not exist");
-        require(block.timestamp >= p.startTime, "Voting not started yet");
-        require(block.timestamp < p.endTime, "Voting period has ended");
-        require(isValidOption(p, option), "Invalid option");
-        require(validMerkleRoots[merkleRoot], "Invalid merkle root");
-        require(
-            !nullifierHashes[nullifierHash],
-            "Already voted with this proof"
-        );
-
-        // Verify Semaphore ZKP
-        semaphore.verifyProof(
-            merkleRoot,
-            nullifierHash,
-            option,
-            externalNullifier,
-            proof
-        );
-
-        // Mark nullifier as used
-        nullifierHashes[nullifierHash] = true;
-
-        // Count vote with configurable weight
-        p.votes[option] += zkVotingWeight;
-        p.totalVotes += zkVotingWeight;
-
-        emit VoteCastZK(proposalId, nullifierHash, option, zkVotingWeight);
     }
 
     function calculateResults(uint256 proposalId) external {
@@ -408,7 +328,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         emit ProposalExecuted(proposalId, msg.sender, true);
     }
 
-    // View functions
     function getProposal(
         uint256 proposalId
     )
@@ -449,7 +368,26 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         return proposals[proposalId].votes[option];
     }
 
-    // Emergency functions
+    function getVoterInfo(
+        uint256 proposalId,
+        address voter
+    )
+        external
+        view
+        returns (bool hasVoted, uint256 weight, uint256 votedOption)
+    {
+        Voter storage v = votes[proposalId][voter];
+        return (v.hasVoted, v.weight, v.votedOption);
+    }
+
+    function getNextProposalId() external view returns (uint256) {
+        return nextProposalId;
+    }
+
+    function getTotalProposals() external view returns (uint256) {
+        return nextProposalId - 1;
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
