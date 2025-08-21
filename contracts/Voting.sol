@@ -5,7 +5,10 @@ pragma solidity >=0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "./Semaphore.sol";
+
 contract VotingSystem is Ownable {
+    Semaphore public semaphore;
     struct Proposal {
         uint256 id;
         string description;
@@ -23,15 +26,19 @@ contract VotingSystem is Ownable {
 
     uint256 public timeLockDuration = 60;
 
+    mapping(uint256 => bool) public nullifierHashes;
+
     constructor(
         address _token,
         uint256 _minBalance,
-        uint256 _quorum
+        uint256 _quorum,
+        address semaphoreAddress
     ) Ownable(msg.sender) {
         require(_token != address(0), "Invalid token address");
         votingToken = IERC20(_token);
         minBalance = _minBalance;
         quorum = _quorum;
+        semaphore = Semaphore(semaphoreAddress);
     }
 
     struct Voter {
@@ -59,6 +66,12 @@ contract VotingSystem is Ownable {
         uint256 indexed id,
         address indexed voter,
         uint256 weight,
+        uint256 votedOption
+    );
+
+    event VoteCastZK(
+        uint256 indexed id,
+        uint256 nullifierHash,
         uint256 votedOption
     );
 
@@ -167,6 +180,47 @@ contract VotingSystem is Ownable {
 
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
     }
+
+    // --- Semaphore ZKP Voting Function ---
+    function zkVote(
+        uint256 proposalId,
+        uint256 option,
+        uint256 merkleRoot,
+        uint256 nullifierHash,
+        uint256 externalNullifier,
+        uint256[8] calldata proof
+    ) external {
+        Proposal storage p = proposals[proposalId];
+
+        require(p.startTime > 0, "Proposal does not exist");
+        require(p.startTime <= block.timestamp, "Voting not started yet");
+        require(p.endTime > block.timestamp, "Voting period has ended");
+        require(isValidOption(p, option), "Invalid option");
+
+        require(
+            !nullifierHashes[nullifierHash],
+            "Already voted with ZK proof!"
+        );
+
+        // Verify Semaphore ZKP
+        semaphore.verifyProof(
+            merkleRoot,
+            nullifierHash,
+            option,
+            externalNullifier,
+            proof
+        );
+
+        // Mark nullifier as used
+        nullifierHashes[nullifierHash] = true;
+
+        // Count vote (1 vote per valid ZK proof)
+        p.votes[option] += 1;
+
+        emit VoteCastZK(proposalId, nullifierHash, option);
+    }
+
+    // --------------------------------------
 
     function proposalResult(
         uint256 proposalId
