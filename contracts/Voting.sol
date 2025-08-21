@@ -17,15 +17,19 @@ contract VotingSystem is Ownable {
         mapping(uint256 => uint256) votes;
     }
 
-    // ERC20 token used for eligibility and weighting
     IERC20 public votingToken;
-    uint256 public minBalance; // Minimum token balance to be eligible
+    uint256 public minBalance;
+    uint256 public quorum;
 
-    constructor(address _token, uint256 _minBalance) Ownable(msg.sender) {
+    constructor(
+        address _token,
+        uint256 _minBalance,
+        uint256 _quorum
+    ) Ownable(msg.sender) {
         require(_token != address(0), "Invalid token address");
-
         votingToken = IERC20(_token);
         minBalance = _minBalance;
+        quorum = _quorum;
     }
 
     struct Voter {
@@ -56,6 +60,16 @@ contract VotingSystem is Ownable {
         uint256 votedOption
     );
 
+    event ProposalResult(
+        uint256 indexed proposalId,
+        uint256[] winners,
+        uint256[] voteCounts,
+        uint256 totalVotes,
+        bool tie,
+        bool noVotes,
+        bool thresholdMet
+    );
+
     function createProposal(
         string memory description,
         uint256 startTime,
@@ -76,7 +90,6 @@ contract VotingSystem is Ownable {
         uint256 proposalId = nextProposalId++;
 
         Proposal storage p = proposals[proposalId];
-
         p.id = proposalId;
         p.description = description;
         p.creator = msg.sender;
@@ -145,5 +158,80 @@ contract VotingSystem is Ownable {
         voterRecords[msg.sender] += 1;
 
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
+    }
+
+    function proposalResult(
+        uint256 proposalId
+    )
+        external
+        view
+        returns (
+            uint256[] memory winners,
+            uint256[] memory voteCounts,
+            uint256 totalVotes,
+            bool tie,
+            bool noVotes,
+            bool thresholdMet
+        )
+    {
+        Proposal storage p = proposals[proposalId];
+        require(block.timestamp > p.endTime, "Voting in progress");
+
+        uint256 optionCount = p.options.length;
+        voteCounts = new uint256[](optionCount);
+        totalVotes = 0;
+        uint256 maxVotes = 0;
+
+        for (uint256 i = 0; i < optionCount; i++) {
+            uint256 count = p.votes[p.options[i]];
+            voteCounts[i] = count;
+            totalVotes += count;
+            if (count > maxVotes) {
+                maxVotes = count;
+            }
+        }
+
+        if (totalVotes == 0) {
+            noVotes = true;
+            tie = false;
+            winners = new uint256[](0);
+            thresholdMet = false;
+            return (
+                winners,
+                voteCounts,
+                totalVotes,
+                tie,
+                noVotes,
+                thresholdMet
+            );
+        }
+
+        require(totalVotes >= quorum, "invalid proposal");
+
+        uint256 tieCount = 0;
+        for (uint256 i = 0; i < optionCount; i++) {
+            if (voteCounts[i] == maxVotes) {
+                tieCount++;
+            }
+        }
+
+        winners = new uint256[](tieCount);
+        uint256 wIdx = 0;
+        for (uint256 i = 0; i < optionCount; i++) {
+            if (voteCounts[i] == maxVotes) {
+                winners[wIdx] = p.options[i];
+                wIdx++;
+            }
+        }
+
+        tie = (tieCount > 1);
+
+        thresholdMet = ((maxVotes * 100) / totalVotes > 50);
+
+        if (tie || !thresholdMet) {
+            winners = new uint256[](0);
+        }
+
+        return (winners, voteCounts, totalVotes, tie, noVotes, thresholdMet);
     }
 }
