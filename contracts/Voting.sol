@@ -21,6 +21,8 @@ contract VotingSystem is Ownable {
     uint256 public minBalance;
     uint256 public quorum;
 
+    uint256 public timeLockDuration = 60;
+
     constructor(
         address _token,
         uint256 _minBalance,
@@ -68,6 +70,12 @@ contract VotingSystem is Ownable {
         bool tie,
         bool noVotes,
         bool thresholdMet
+    );
+
+    event ProposalExecuted(
+        uint256 indexed proposalId,
+        address indexed executor,
+        bool success
     );
 
     function createProposal(
@@ -163,7 +171,7 @@ contract VotingSystem is Ownable {
     function proposalResult(
         uint256 proposalId
     )
-        external
+        public
         view
         returns (
             uint256[] memory winners,
@@ -233,5 +241,41 @@ contract VotingSystem is Ownable {
         }
 
         return (winners, voteCounts, totalVotes, tie, noVotes, thresholdMet);
+    }
+
+    function executeProposal(uint proposalId) external {
+        require(msg.sender == proposals[proposalId].creator, "Not allowed");
+        Proposal storage p = proposals[proposalId];
+        require(p.startTime > 0, "Proposal does not exist");
+
+        require(!p.executed, "Proposal has been already executed");
+        require(
+            block.timestamp > p.endTime,
+            "Proposal voting period not ended yet"
+        );
+
+        require(
+            block.timestamp > p.endTime + timeLockDuration,
+            "Time lock duration not ended yet"
+        );
+
+        (
+            uint256[] memory winners,
+            uint256[] memory voteCounts,
+            uint256 totalVotes,
+            bool tie,
+            bool noVotes,
+            bool thresholdMet
+        ) = proposalResult(proposalId);
+
+        require(totalVotes >= quorum, "Not a valid proposal");
+        require(thresholdMet, "Threshold not met");
+        require(!tie, "Proposal tied");
+        require(!noVotes, "No votes cast");
+        require(winners.length > 0, "No winner");
+
+        proposals[proposalId].executed = true;
+
+        emit ProposalExecuted(proposalId, msg.sender, true);
     }
 }
