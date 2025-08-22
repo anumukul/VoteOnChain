@@ -40,6 +40,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     uint256 public quorum;
     uint256 public timeLockDuration = 60;
 
+    // Transparency & auditability additions:
+    bytes32[] public allProposals;
+    mapping(bytes32 => address[]) public proposalVoters;
+
     mapping(bytes32 => Proposal) proposals;
     mapping(bytes32 => mapping(address => Voter)) public votes;
     mapping(bytes32 => ProposalResults) public proposalResults;
@@ -151,6 +155,8 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             proposalVotes[proposalId][options[i]] = 0; // Initialize vote count for each option
         }
 
+        allProposals.push(proposalId);
+
         emit ProposalCreated(
             proposalId,
             description,
@@ -211,6 +217,8 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         v.weight = voteWeight;
         v.votedOption = option;
         voterRecords[msg.sender] += 1;
+
+        proposalVoters[proposalId].push(msg.sender);
 
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
     }
@@ -426,6 +434,17 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         address voter
     ) external view returns (uint256) {
         return lockedTokens[proposalId][voter];
+    }
+
+    // Transparency & auditability getters
+    function getAllProposals() external view returns (bytes32[] memory) {
+        return allProposals;
+    }
+
+    function getProposalVoters(
+        bytes32 proposalId
+    ) external view returns (address[] memory) {
+        return proposalVoters[proposalId];
     }
 
     function pause() external onlyOwner {
