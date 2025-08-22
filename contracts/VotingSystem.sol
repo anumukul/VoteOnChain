@@ -17,6 +17,9 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         bool executed;
         uint256 totalVotes;
         bool resultsCalculated;
+        address target; // NEW: contract to call if proposal is executed
+        bytes data; // NEW: calldata for the contract
+        uint256 timeLockDuration; // NEW: per-proposal timelock
     }
 
     struct ProposalResults {
@@ -38,9 +41,8 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     IERC20 public votingToken;
     uint256 public minBalance;
     uint256 public quorum;
-    uint256 public timeLockDuration = 60;
+    uint256 public defaultTimeLockDuration = 60;
 
-    // Transparency & auditability additions:
     bytes32[] public allProposals;
     mapping(bytes32 => address[]) public proposalVoters;
 
@@ -57,7 +59,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         address indexed createdBy,
         uint256 startTime,
         uint256 endTime,
-        uint256[] options
+        uint256[] options,
+        address target,
+        bytes data,
+        uint256 timeLockDuration
     );
 
     event VoteCast(
@@ -81,7 +86,8 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     event ProposalExecuted(
         bytes32 indexed proposalId,
         address indexed executor,
-        bool success
+        bool success,
+        bytes returnData
     );
 
     event TokensWithdrawn(
@@ -107,7 +113,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         string memory description,
         uint256 startTime,
         uint256 endTime,
-        uint256[] memory options
+        uint256[] memory options,
+        address target,
+        bytes memory data,
+        uint256 timeLockDuration_
     ) external {
         require(bytes(description).length > 0, "Description is required");
         require(
@@ -132,7 +141,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
         // Hash-based unique proposal id
         bytes32 proposalId = keccak256(
-            abi.encodePacked(msg.sender, block.timestamp, description, options)
+            abi.encodePacked(
+                msg.sender,
+                block.timestamp,
+                description,
+                options,
+                target,
+                data
+            )
         );
 
         require(
@@ -149,6 +165,11 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         p.executed = false;
         p.totalVotes = 0;
         p.resultsCalculated = false;
+        p.target = target;
+        p.data = data;
+        p.timeLockDuration = timeLockDuration_ > 0
+            ? timeLockDuration_
+            : defaultTimeLockDuration;
 
         for (uint i = 0; i < options.length; i++) {
             p.options.push(options[i]);
@@ -163,7 +184,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             msg.sender,
             startTime,
             endTime,
-            options
+            options,
+            target,
+            data,
+            p.timeLockDuration
         );
     }
 
@@ -360,7 +384,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         require(!p.executed, "Proposal already executed");
         require(block.timestamp > p.endTime, "Voting period not ended");
         require(
-            block.timestamp > p.endTime + timeLockDuration,
+            block.timestamp > p.endTime + p.timeLockDuration,
             "Timelock not expired"
         );
         require(p.resultsCalculated, "Results not calculated");
@@ -371,10 +395,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         require(!result.tie, "Proposal ended in tie");
         require(!result.noVotes, "No votes cast");
         require(result.winners.length > 0, "No winner determined");
+        require(p.target != address(0), "No target contract to execute");
 
         p.executed = true;
 
-        emit ProposalExecuted(proposalId, msg.sender, true);
+        // Execute call
+        (bool success, bytes memory returnData) = p.target.call(p.data);
+
+        emit ProposalExecuted(proposalId, msg.sender, success, returnData);
     }
 
     function getProposal(
@@ -391,7 +419,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             uint256[] memory options,
             bool executed,
             uint256 totalVotes,
-            bool resultsCalculated
+            bool resultsCalculated,
+            address target,
+            bytes memory data,
+            uint256 timeLockDuration
         )
     {
         Proposal storage p = proposals[proposalId];
@@ -406,7 +437,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             p.options,
             p.executed,
             p.totalVotes,
-            p.resultsCalculated
+            p.resultsCalculated,
+            p.target,
+            p.data,
+            p.timeLockDuration
         );
     }
 
@@ -436,7 +470,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         return lockedTokens[proposalId][voter];
     }
 
-    // Transparency & auditability getters
     function getAllProposals() external view returns (bytes32[] memory) {
         return allProposals;
     }
@@ -455,8 +488,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         _unpause();
     }
 
-    function setTimeLockDuration(uint256 _timeLockDuration) external onlyOwner {
-        timeLockDuration = _timeLockDuration;
+    function setDefaultTimeLockDuration(
+        uint256 _defaultTimeLockDuration
+    ) external onlyOwner {
+        defaultTimeLockDuration = _defaultTimeLockDuration;
     }
 
     function setQuorum(uint256 _quorum) external onlyOwner {
