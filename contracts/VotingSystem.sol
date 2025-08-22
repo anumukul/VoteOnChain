@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     struct Proposal {
-        uint256 id;
+        bytes32 id;
         string description;
         address creator;
         uint256 startTime;
@@ -40,16 +40,15 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     uint256 public quorum;
     uint256 public timeLockDuration = 60;
 
-    uint256 private nextProposalId = 1;
-    mapping(uint256 => Proposal) proposals;
-    mapping(uint256 => mapping(address => Voter)) public votes;
-    mapping(uint256 => ProposalResults) public proposalResults;
+    mapping(bytes32 => Proposal) proposals;
+    mapping(bytes32 => mapping(address => Voter)) public votes;
+    mapping(bytes32 => ProposalResults) public proposalResults;
     mapping(address => uint256) public voterRecords;
-    mapping(uint256 => mapping(uint256 => uint256)) public proposalVotes; // proposalId => optionId => votes
-    mapping(uint256 => mapping(address => uint256)) public lockedTokens; // proposalId => voter => amount
+    mapping(bytes32 => mapping(uint256 => uint256)) public proposalVotes; // proposalId => optionId => votes
+    mapping(bytes32 => mapping(address => uint256)) public lockedTokens; // proposalId => voter => amount
 
     event ProposalCreated(
-        uint256 indexed id,
+        bytes32 indexed id,
         string description,
         address indexed createdBy,
         uint256 startTime,
@@ -58,14 +57,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     );
 
     event VoteCast(
-        uint256 indexed id,
+        bytes32 indexed id,
         address indexed voter,
         uint256 weight,
         uint256 votedOption
     );
 
     event ProposalResultCalculated(
-        uint256 indexed proposalId,
+        bytes32 indexed proposalId,
         uint256[] winners,
         uint256[] voteCounts,
         uint256 totalVotes,
@@ -76,13 +75,13 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     );
 
     event ProposalExecuted(
-        uint256 indexed proposalId,
+        bytes32 indexed proposalId,
         address indexed executor,
         bool success
     );
 
     event TokensWithdrawn(
-        uint256 indexed proposalId,
+        bytes32 indexed proposalId,
         address indexed voter,
         uint256 amount
     );
@@ -123,7 +122,15 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        uint256 proposalId = nextProposalId++;
+        // Hash-based unique proposal id
+        bytes32 proposalId = keccak256(
+            abi.encodePacked(msg.sender, block.timestamp, description, options)
+        );
+
+        require(
+            proposals[proposalId].startTime == 0,
+            "Proposal already exists"
+        );
 
         Proposal storage p = proposals[proposalId];
         p.id = proposalId;
@@ -163,7 +170,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     }
 
     function vote(
-        uint256 proposalId,
+        bytes32 proposalId,
         uint256 option,
         uint256 weight
     ) external nonReentrant whenNotPaused {
@@ -188,7 +195,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             voteWeight = voterBalance;
         }
 
-        // Token locking: transfer tokens from voter to contract
         require(
             votingToken.transferFrom(msg.sender, address(this), voteWeight),
             "Token transfer failed"
@@ -205,7 +211,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
     }
 
-    function withdrawLockedTokens(uint256 proposalId) external nonReentrant {
+    function withdrawLockedTokens(bytes32 proposalId) external nonReentrant {
         Proposal storage p = proposals[proposalId];
         require(p.startTime > 0, "Proposal does not exist");
         require(block.timestamp > p.endTime, "Voting period not ended");
@@ -222,7 +228,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         emit TokensWithdrawn(proposalId, msg.sender, amount);
     }
 
-    function calculateResults(uint256 proposalId) external {
+    function calculateResults(bytes32 proposalId) external {
         Proposal storage p = proposals[proposalId];
         require(p.startTime > 0, "Proposal does not exist");
         require(block.timestamp > p.endTime, "Voting still in progress");
@@ -235,7 +241,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
         // Calculate vote counts and find maximum
         for (uint256 i = 0; i < optionCount; i++) {
-            uint256 count = proposalVotes[proposalId][p.options[i]]; // Changed here
+            uint256 count = proposalVotes[proposalId][p.options[i]];
             voteCounts[i] = count;
             if (count > maxVotes) {
                 maxVotes = count;
@@ -303,7 +309,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getProposalResults(
-        uint256 proposalId
+        bytes32 proposalId
     )
         external
         view
@@ -335,7 +341,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         );
     }
 
-    function executeProposal(uint256 proposalId) external nonReentrant {
+    function executeProposal(bytes32 proposalId) external nonReentrant {
         Proposal storage p = proposals[proposalId];
         require(p.startTime > 0, "Proposal does not exist");
         require(msg.sender == p.creator, "Only creator can execute");
@@ -360,12 +366,12 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getProposal(
-        uint256 proposalId
+        bytes32 proposalId
     )
         external
         view
         returns (
-            uint256 id,
+            bytes32 id,
             string memory description,
             address creator,
             uint256 startTime,
@@ -393,14 +399,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getVoteCount(
-        uint256 proposalId,
+        bytes32 proposalId,
         uint256 option
     ) external view returns (uint256) {
-        return proposalVotes[proposalId][option]; // Changed here
+        return proposalVotes[proposalId][option];
     }
 
     function getVoterInfo(
-        uint256 proposalId,
+        bytes32 proposalId,
         address voter
     )
         external
@@ -412,18 +418,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getLockedTokens(
-        uint256 proposalId,
+        bytes32 proposalId,
         address voter
     ) external view returns (uint256) {
         return lockedTokens[proposalId][voter];
-    }
-
-    function getNextProposalId() external view returns (uint256) {
-        return nextProposalId;
-    }
-
-    function getTotalProposals() external view returns (uint256) {
-        return nextProposalId - 1;
     }
 
     function pause() external onlyOwner {
