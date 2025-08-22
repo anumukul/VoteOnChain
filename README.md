@@ -1,227 +1,141 @@
-# VotingSystem Contract
+# VotingSystem Smart Contract
 
-## Overview
-
-This smart contract enables decentralized proposal creation, voting, and execution using ERC20 token-based voting.
-
-- **ERC20 token voting**: Votes are weighted by token balance or user-specified weight.
-
-It is designed for governance systems, DAOs, or any scenario where transparent, token-based voting is required.
+A robust, secure, and extensible smart contract for on-chain governance using ERC20 tokens. Supports weighted voting, token lock, per-proposal timelock, on-chain execution, and full auditability.
 
 ---
 
 ## Features
 
-- **Create Proposals**: Only the contract owner can create proposals with multiple options and a voting time window.
-- **Token-Based Voting**: Users vote with ERC20 tokens, weighted by their balance or a provided weight.
-- **Result Calculation**: After voting ends, anyone can view results, including winner(s), vote counts, tie status, and quorum checks.
-- **Proposal Execution**: After the voting and timelock period, the proposal creator can execute the proposal.
-- **Security**: Uses OpenZeppelin's Ownable for access control, ReentrancyGuard for security, and prevents double-voting.
-- **Admin Controls**: Pause/unpause functionality and parameter updates.
+- **Proposal Creation:**  
+  - Any user with the minimum required token balance can create proposals.
+  - Each proposal is uniquely identified using a hash.
+  - Proposals can specify options, voting periods, target contract (for execution), calldata, and custom timelock.
+
+- **Weighted Voting & Token Lock:**  
+  - Voting power is proportional to the voter's token balance (or a chosen amount up to their balance).
+  - Tokens used for voting are locked in the contract until after the voting period.
+
+- **Result Calculation:**  
+  - Anyone can calculate and record the results after voting ends.
+  - Results include: winners, vote counts, total votes, quorum/threshold/tie/noVotes status.
+
+- **On-Chain Execution:**  
+  - Proposals can be executed on-chain, calling a target contract with custom calldata if they pass and after their timelock expires.
+
+- **Immutability:**  
+  - Votes cannot be changed or revoked after being cast.
+
+- **Transparency & Auditability:**  
+  - Publicly list all proposals and all voters per proposal.
+  - Query individual votes, locked tokens, and proposal details.
+
+- **Security:**  
+  - Reentrancy protection on all critical functions.
+  - Access control for proposal creation & contract pausing/unpausing.
+
+- **Configurable Governance Parameters:**  
+  - Owner can update minimum balance, quorum, and default timelock duration.
 
 ---
 
-## Contract Architecture
+## Main Contract Interfaces
 
-- **Proposal Struct**: Each proposal tracks options, votes per option, creator, timing, and execution status.
-- **Voter Struct**: Records if a user has voted, their weight, and chosen option.
-- **Result Storage**: Permanent storage of calculated results for each proposal.
-- **Event System**: Comprehensive logging for frontend integration.
+### Proposal Creation
+
+```solidity
+function createProposal(
+    string memory description,
+    uint256 startTime,
+    uint256 endTime,
+    uint256[] memory options,
+    address target,
+    bytes memory data,
+    uint256 timeLockDuration_
+) external
+```
+
+- `target`, `data`, and `timeLockDuration_` enable on-chain execution and flexible timelock per proposal.
+
+### Voting
+
+```solidity
+function vote(bytes32 proposalId, uint256 option, uint256 weight) external
+```
+- Tokens are locked in the contract on vote.
+
+### Result Calculation
+
+```solidity
+function calculateResults(bytes32 proposalId) external
+```
+
+### Proposal Execution (On-Chain)
+
+```solidity
+function executeProposal(bytes32 proposalId) external
+```
+- Calls the proposal's target contract with the specified data if the proposal passes.
 
 ---
 
-## Getting Started
+## Querying Data
 
-### Prerequisites
-
-- Solidity ^0.8.20
-- OpenZeppelin Contracts
-- ERC20 token contract
-- [Hardhat](https://hardhat.org/), [Foundry](https://book.getfoundry.sh/), or [Remix IDE](https://remix.ethereum.org/)
-
-### Installation
-
-1. **Clone your project repo and install dependencies**:
-
-   ```bash
-   npm install @openzeppelin/contracts
-   ```
-
-2. **Deploy ERC20 token contract**:
-
-   - Use any standard ERC20 token
-
-3. **Deploy VotingSystem contract**:
-   - Pass the deployed ERC20 token address to the constructor.
-
----
-
-## Usage
-
-### 1. Create Proposal (Owner Only)
-
-```solidity
-createProposal(
-  string description,
-  uint256 startTime,
-  uint256 endTime,
-  uint256[] options
-)
-```
-
-- **description**: Proposal summary.
-- **startTime**: Unix timestamp when voting starts.
-- **endTime**: Unix timestamp when voting ends.
-- **options**: Array of option IDs (e.g., [1, 2, 3] for three choices).
-
-### 2. Token-Based Voting
-
-```solidity
-vote(
-  uint256 proposalId,
-  uint256 option,
-  uint256 weight
-)
-```
-
-- User must have at least `minBalance` of the ERC20 token.
-- Vote weight can be set manually or defaults to full balance.
-- Weight cannot exceed user's token balance.
-
-### 3. Calculate Results
-
-```solidity
-calculateResults(proposalId)
-```
-
-Must be called after voting ends to compute and store results.
-
-### 4. View Proposal Results
-
-```solidity
-getProposalResults(proposalId)
-```
-
-Returns tuple:
-
-- `winners` (array of winning option IDs)
-- `voteCounts` (votes per option)
-- `totalVotes`
-- `tie` (bool)
-- `noVotes` (bool)
-- `thresholdMet` (bool - requires >50%)
-- `quorumMet` (bool)
-
-### 5. Execute Proposal
-
-```solidity
-executeProposal(proposalId)
-```
-
-- Only creator can execute after voting and timelock.
-- Requires quorum met, threshold met, no tie, and votes cast.
-- Emits `ProposalExecuted`.
-
----
-
-## View Functions
-
-- `getProposal(proposalId)`: Get proposal details
-- `getVoteCount(proposalId, option)`: Get votes for specific option
-- `getVoterInfo(proposalId, voter)`: Get voter's voting details
-- `getNextProposalId()`: Get next proposal ID
-- `getTotalProposals()`: Get total number of proposals
-
----
-
-## Admin Functions
-
-- `pause() / unpause()`: Emergency stop functionality
-- `setQuorum(uint256)`: Update quorum requirement
-- `setMinBalance(uint256)`: Update minimum token balance
-- `setTimeLockDuration(uint256)`: Update execution timelock
+- **List all proposals:**  
+  `getAllProposals()`
+- **List all voters for a proposal:**  
+  `getProposalVoters(bytes32 proposalId)`
+- **Get proposal details:**  
+  `getProposal(bytes32 proposalId)`
+- **Get individual voter info:**  
+  `getVoterInfo(bytes32 proposalId, address voter)`
+- **Get proposal results:**  
+  `getProposalResults(bytes32 proposalId)`
+- **Get locked tokens:**  
+  `getLockedTokens(bytes32 proposalId, address voter)`
 
 ---
 
 ## Events
 
-- `ProposalCreated`: Proposal is created.
-- `VoteCast`: Vote is cast.
-- `ProposalResultCalculated`: Results are computed and stored.
-- `ProposalExecuted`: Proposal is executed.
+- `ProposalCreated`
+- `VoteCast`
+- `ProposalResultCalculated`
+- `ProposalExecuted`
+- `TokensWithdrawn`
 
 ---
 
-## Example Workflow
+## Security Best Practices
 
-1. **Owner** deploys ERC20 token and VotingSystem contracts.
-2. **Owner** creates a proposal with multiple options.
-3. **Voters** call `vote()` with their tokens during the voting period.
-4. **Anyone** calls `calculateResults()` after voting ends.
-5. **Anyone** can view results using `getProposalResults()`.
-6. **Creator** executes proposal after timelock period if requirements are met.
+- Uses OpenZeppelin's Ownable, Pausable, and ReentrancyGuard.
+- No mappings inside structs for extensibility and enumeration.
+- Hash-based IDs to avoid collisions.
+- Comprehensive event logging for transparency.
 
 ---
 
-## Configuration Parameters
+## Example Usage Flow
 
-- **minBalance**: Minimum token balance required to vote
-- **quorum**: Minimum total votes required for valid proposal
-- **timeLockDuration**: Delay between voting end and execution (default: 60 seconds)
-- **Threshold**: Winner must have >50% of total votes
-
----
-
-## Security Features
-
-- **ReentrancyGuard**: Prevents reentrancy attacks
-- **Pausable**: Emergency stop functionality
-- **Access Control**: Owner-only proposal creation
-- **Double Voting Prevention**: Users can only vote once per proposal
-- **Input Validation**: Comprehensive parameter checking
-- **Timelock**: Delay between voting and execution
+1. **Create a proposal** with voting options, target contract, calldata, and optional timelock.
+2. **Users vote** (tokens locked).
+3. **Anyone calculates results** after voting ends.
+4. **Proposal creator executes** proposal on-chain after timelock, if passed.
+5. **Voters withdraw their locked tokens** after voting ends.
 
 ---
 
-## Testing
+## Extending and Integrating
 
-Run the comprehensive test suite:
-
-```bash
-npx hardhat test
-```
-
-Tests cover:
-
-- Proposal creation and validation
-- Voting mechanics and weight calculation
-- Double voting prevention
-- Result calculation accuracy
-- Proposal execution requirements
-- Admin functionality
-- Security features
-
----
-
-## Deployment
-
-```bash
-# Local deployment
-npx hardhat run scripts/deploy.js
-
-# Testnet deployment
-npx hardhat run scripts/deploy.js --network goerli
-```
-
----
-
-## References
-
-- [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts)
-- [Hardhat Documentation](https://hardhat.org/)
+- Easily extend for delegated voting, proposal cancellation, advanced execution logic, or integration with off-chain governance tools.
 
 ---
 
 ## License
 
 MIT
+
+---
+
+## Author
+
+[anumukul](https://github.com/anumukul)
