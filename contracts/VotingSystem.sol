@@ -107,6 +107,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     ) external {
         require(bytes(description).length > 0, "Description is required");
         require(
+            votingToken.balanceOf(msg.sender) >= minBalance,
+            "Insufficient tokens to create proposal"
+        );
+        require(
             startTime > block.timestamp,
             "Start time must be in the future"
         );
