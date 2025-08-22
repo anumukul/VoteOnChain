@@ -15,7 +15,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 endTime;
         uint256[] options;
         bool executed;
-        mapping(uint256 => uint256) votes;
         uint256 totalVotes;
         bool resultsCalculated;
     }
@@ -46,6 +45,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => mapping(address => Voter)) public votes;
     mapping(uint256 => ProposalResults) public proposalResults;
     mapping(address => uint256) public voterRecords;
+    mapping(uint256 => mapping(uint256 => uint256)) public proposalVotes; // proposalId => optionId => votes
 
     event ProposalCreated(
         uint256 indexed id,
@@ -98,7 +98,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 startTime,
         uint256 endTime,
         uint256[] memory options
-    ) external  {
+    ) external {
         require(bytes(description).length > 0, "Description is required");
         require(
             startTime > block.timestamp,
@@ -130,7 +130,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
         for (uint i = 0; i < options.length; i++) {
             p.options.push(options[i]);
-            p.votes[options[i]] = 0;
+            proposalVotes[proposalId][options[i]] = 0; // Initialize vote count for each option
         }
 
         emit ProposalCreated(
@@ -181,7 +181,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             voteWeight = voterBalance;
         }
 
-        p.votes[option] += voteWeight;
+        proposalVotes[proposalId][option] += voteWeight; // Changed here
         p.totalVotes += voteWeight;
         v.hasVoted = true;
         v.weight = voteWeight;
@@ -204,7 +204,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
         // Calculate vote counts and find maximum
         for (uint256 i = 0; i < optionCount; i++) {
-            uint256 count = p.votes[p.options[i]];
+            uint256 count = proposalVotes[proposalId][p.options[i]]; // Changed here
             voteCounts[i] = count;
             if (count > maxVotes) {
                 maxVotes = count;
@@ -365,7 +365,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 proposalId,
         uint256 option
     ) external view returns (uint256) {
-        return proposals[proposalId].votes[option];
+        return proposalVotes[proposalId][option]; // Changed here
     }
 
     function getVoterInfo(
