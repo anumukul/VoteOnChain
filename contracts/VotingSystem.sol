@@ -46,6 +46,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => ProposalResults) public proposalResults;
     mapping(address => uint256) public voterRecords;
     mapping(uint256 => mapping(uint256 => uint256)) public proposalVotes; // proposalId => optionId => votes
+    mapping(uint256 => mapping(address => uint256)) public lockedTokens; // proposalId => voter => amount
 
     event ProposalCreated(
         uint256 indexed id,
@@ -78,6 +79,12 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         uint256 indexed proposalId,
         address indexed executor,
         bool success
+    );
+
+    event TokensWithdrawn(
+        uint256 indexed proposalId,
+        address indexed voter,
+        uint256 amount
     );
 
     constructor(
@@ -181,7 +188,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             voteWeight = voterBalance;
         }
 
-        proposalVotes[proposalId][option] += voteWeight; // Changed here
+        // Token locking: transfer tokens from voter to contract
+        require(
+            votingToken.transferFrom(msg.sender, address(this), voteWeight),
+            "Token transfer failed"
+        );
+        lockedTokens[proposalId][msg.sender] = voteWeight;
+
+        proposalVotes[proposalId][option] += voteWeight;
         p.totalVotes += voteWeight;
         v.hasVoted = true;
         v.weight = voteWeight;
@@ -189,6 +203,23 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         voterRecords[msg.sender] += 1;
 
         emit VoteCast(proposalId, msg.sender, voteWeight, option);
+    }
+
+    function withdrawLockedTokens(uint256 proposalId) external nonReentrant {
+        Proposal storage p = proposals[proposalId];
+        require(p.startTime > 0, "Proposal does not exist");
+        require(block.timestamp > p.endTime, "Voting period not ended");
+
+        uint256 amount = lockedTokens[proposalId][msg.sender];
+        require(amount > 0, "No tokens to withdraw");
+
+        lockedTokens[proposalId][msg.sender] = 0;
+        require(
+            votingToken.transfer(msg.sender, amount),
+            "Token withdraw failed"
+        );
+
+        emit TokensWithdrawn(proposalId, msg.sender, amount);
     }
 
     function calculateResults(uint256 proposalId) external {
@@ -378,6 +409,13 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     {
         Voter storage v = votes[proposalId][voter];
         return (v.hasVoted, v.weight, v.votedOption);
+    }
+
+    function getLockedTokens(
+        uint256 proposalId,
+        address voter
+    ) external view returns (uint256) {
+        return lockedTokens[proposalId][voter];
     }
 
     function getNextProposalId() external view returns (uint256) {
