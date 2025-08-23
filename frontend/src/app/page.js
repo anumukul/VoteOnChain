@@ -1,4 +1,42 @@
-return (
+"use client";
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
+import { getVotingSystemContract } from "../lib/contracts";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount } from "wagmi";
+
+export default function Home() {
+  const [proposals, setProposals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { address } = useAccount();
+
+  useEffect(() => {
+    async function fetchProposals() {
+      setLoading(true);
+      const rpcUrl = process.env.NEXT_PUBLIC_INFURA_RPC_URL;
+      const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+      const contract = getVotingSystemContract(provider);
+      const ids = await contract.getAllProposals();
+      const details = await Promise.all(
+        ids.map(async (id) => {
+          const proposal = await contract.getProposal(id);
+          return {
+            id,
+            description: proposal.description,
+            creator: proposal.creator,
+            startTime: proposal.startTime,
+            endTime: proposal.endTime,
+            executed: proposal.executed
+          };
+        })
+      );
+      setProposals(details);
+      setLoading(false);
+    }
+    fetchProposals();
+  }, []);
+
+  return (
   <div className="p-8 flex flex-col items-center">
     <ConnectButton />
     {/* Navigation link to create proposal */}
@@ -26,3 +64,4 @@ return (
     )}
   </div>
 );
+}
