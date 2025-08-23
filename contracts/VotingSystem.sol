@@ -17,9 +17,9 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         bool executed;
         uint256 totalVotes;
         bool resultsCalculated;
-        address target; // NEW: contract to call if proposal is executed
-        bytes data; // NEW: calldata for the contract
-        uint256 timeLockDuration; // NEW: per-proposal timelock
+        address target; 
+        bytes data; 
+        uint256 timeLockDuration; 
     }
 
     struct ProposalResults {

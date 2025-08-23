@@ -2,38 +2,47 @@
 
 A robust, secure, and extensible smart contract for on-chain governance using ERC20 tokens. Supports weighted voting, token lock, per-proposal timelock, on-chain execution, and full auditability.
 
+contract Address=0x516ee2DCed524e064e1fdCb4397A08Dc51219DbC
+
 ---
 
 ## Features
 
-- **Proposal Creation:**  
+- **Proposal Creation:**
+
   - Any user with the minimum required token balance can create proposals.
   - Each proposal is uniquely identified using a hash.
   - Proposals can specify options, voting periods, target contract (for execution), calldata, and custom timelock.
 
-- **Weighted Voting & Token Lock:**  
+- **Weighted Voting & Token Lock:**
+
   - Voting power is proportional to the voter's token balance (or a chosen amount up to their balance).
   - Tokens used for voting are locked in the contract until after the voting period.
 
-- **Result Calculation:**  
+- **Result Calculation:**
+
   - Anyone can calculate and record the results after voting ends.
   - Results include: winners, vote counts, total votes, quorum/threshold/tie/noVotes status.
 
-- **On-Chain Execution:**  
+- **On-Chain Execution:**
+
   - Proposals can be executed on-chain, calling a target contract with custom calldata if they pass and after their timelock expires.
 
-- **Immutability:**  
+- **Immutability:**
+
   - Votes cannot be changed or revoked after being cast.
 
-- **Transparency & Auditability:**  
+- **Transparency & Auditability:**
+
   - Publicly list all proposals and all voters per proposal.
   - Query individual votes, locked tokens, and proposal details.
 
-- **Security:**  
+- **Security:**
+
   - Reentrancy protection on all critical functions.
   - Access control for proposal creation & contract pausing/unpausing.
 
-- **Configurable Governance Parameters:**  
+- **Configurable Governance Parameters:**
   - Owner can update minimum balance, quorum, and default timelock duration.
 
 ---
@@ -61,6 +70,7 @@ function createProposal(
 ```solidity
 function vote(bytes32 proposalId, uint256 option, uint256 weight) external
 ```
+
 - Tokens are locked in the contract on vote.
 
 ### Result Calculation
@@ -74,6 +84,7 @@ function calculateResults(bytes32 proposalId) external
 ```solidity
 function executeProposal(bytes32 proposalId) external
 ```
+
 - Calls the proposal's target contract with the specified data if the proposal passes.
 
 ---
