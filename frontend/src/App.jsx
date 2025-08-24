@@ -14,7 +14,7 @@ const ERC20_ADDRESS = '0x3C40766e14c13Ce9e62610B5C17a6623563a1517';
 export default function App() {
   const { address, isConnected } = useAccount();
 
-  // VotingSystem: Read proposals
+  // Get proposals from Voting contract
   const { data: proposals } = useContractRead({
     address: VOTING_ADDRESS,
     abi: votingAbi,
@@ -22,7 +22,7 @@ export default function App() {
     watch: true,
   });
 
-  // ERC20Mock: Read user balance
+  // Get user's ERC20 token balance
   const { data: balance } = useContractRead({
     address: ERC20_ADDRESS,
     abi: erc20Abi,
@@ -32,10 +32,10 @@ export default function App() {
     watch: true,
   });
 
-  // Write contract hooks
+  // Write contract hook for sending transactions
   const { writeContract, isPending } = useWriteContract();
 
-  // Approve simulation (for token approval)
+  // Simulate Approve function for ERC20
   const { data: approveSim } = useSimulateContract({
     address: ERC20_ADDRESS,
     abi: erc20Abi,
@@ -44,7 +44,7 @@ export default function App() {
     enabled: isConnected,
   });
 
-  // Helper: Vote simulation per proposal
+  // Helper: Simulate vote for a proposal
   function useVoteSim(proposalId) {
     return useSimulateContract({
       address: VOTING_ADDRESS,
@@ -56,7 +56,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-8">
+    <div className="min-h-screen flex flex-col items-center px-4 py-8 bg-gray-900">
       <h1 className="text-4xl font-bold text-blue-600 mb-8">Voting DApp</h1>
       <ConnectButton />
       {isConnected && (
@@ -71,12 +71,15 @@ export default function App() {
           >
             Approve Token
           </button>
+
+          {/* Display proposals and vote buttons */}
           <div className="w-full max-w-2xl mt-10">
-            {(proposals || []).map((p, idx) => {
+            {(proposals || []).map((proposal, idx) => {
+              // Simulate voting for each proposal
               const { data: voteSim } = useVoteSim(idx);
               return (
-                <div key={idx} className="border rounded-lg p-4 mb-4 flex justify-between">
-                  <span>{p.title || `Proposal ${idx}`}</span>
+                <div key={idx} className="border rounded-lg p-4 mb-4 flex justify-between bg-gray-800 text-white">
+                  <span>{proposal.title || `Proposal ${idx}`}</span>
                   <button
                     className="bg-blue-600 text-white px-4 py-2 rounded"
                     disabled={!voteSim?.request || isPending}
