@@ -1,21 +1,21 @@
 {
   "network": "sepolia",
-  "deployer": "0x6AFdcc2ff48cbEdE371F35C2083E62E1fF812b90",
+  "deployer": "0xeBd86998e8C765F92CC5022ff94eB093eFCFa8a4",
   "contracts": {
     "ERC20Mock": {
-      "address": "0x94542b2F9A88a00EFa671CA3CFBe9A675eeCA78F",
+      "address": "0xe1267DBA9e3E3749aAF1eFfbC3C4D409f4CbF7Bf",
       "name": "Governance Token",
       "symbol": "GOV",
       "totalSupply": "1050000"
     },
     "VotingSystem": {
-      "address": "0xA7F0D089C97889f33785588d4717d246d1E61E41",
+      "address": "0xF51F3bD4C08b510e704058694AD59B690784055F",
       "minBalance": "100",
       "defaultQuorum": "1000"
     },
     "MockTargetContract": {
-      "address": "0xbe2AA8AB16d24b5Cd696A7C464833Efb895195d0"
+      "address": "0xC799F442F85D4d28DA377342F30C39041b9c102A"
     }
   },
-  "deployedAt": "2025-08-31T16:13:21.130Z"
+  "deployedAt": "2026-02-06T21:58:07.271Z"
 }

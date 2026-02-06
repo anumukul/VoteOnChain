@@ -2,15 +2,15 @@
   "chainId": 11155111,
   "contracts": {
     "token": {
-      "address": "0x94542b2F9A88a00EFa671CA3CFBe9A675eeCA78F",
+      "address": "0xe1267DBA9e3E3749aAF1eFfbC3C4D409f4CbF7Bf",
       "abi": "ERC20Mock"
     },
     "voting": {
-      "address": "0xA7F0D089C97889f33785588d4717d246d1E61E41",
+      "address": "0xF51F3bD4C08b510e704058694AD59B690784055F",
       "abi": "VotingSystem"
     },
     "target": {
-      "address": "0xbe2AA8AB16d24b5Cd696A7C464833Efb895195d0",
+      "address": "0xC799F442F85D4d28DA377342F30C39041b9c102A",
       "abi": "MockTargetContract"
     }
   }
