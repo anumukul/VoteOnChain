@@ -203,14 +203,15 @@ export default function ProposalDetailPage() {
   const votingStarted = now >= Number(startTime);
   const votingEnded = now >= Number(endTime);
   const stateNum = Number(state);
-  const isActive = stateNum === 1;
   const hasNotVoted = voterInfo === undefined || !voterInfo[0];
+  const inVotingWindow = votingStarted && !votingEnded;
+  const canShowVoteUI =
+    (stateNum === 1) || (stateNum === 0 && inVotingWindow);
   const canVote = Boolean(
     isConnected &&
     address &&
-    isActive &&
-    votingStarted &&
-    !votingEnded &&
+    canShowVoteUI &&
+    inVotingWindow &&
     hasNotVoted
   );
   const { displayStateNum, displayLabel: stateLabel } = getProposalDisplayState(
