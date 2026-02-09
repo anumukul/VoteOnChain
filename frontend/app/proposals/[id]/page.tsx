@@ -204,16 +204,14 @@ export default function ProposalDetailPage() {
   const votingEnded = now >= Number(endTime);
   const stateNum = Number(state);
   const isActive = stateNum === 1;
+  const hasNotVoted = voterInfo === undefined || !voterInfo[0];
   const canVote = Boolean(
     isConnected &&
     address &&
     isActive &&
     votingStarted &&
     !votingEnded &&
-    voterInfo &&
-    !voterInfo[0] &&
-    balance !== undefined &&
-    balance >= BigInt(100 * 1e18)
+    hasNotVoted
   );
   const { displayStateNum, displayLabel: stateLabel } = getProposalDisplayState(
     startTime,
@@ -634,7 +632,8 @@ export default function ProposalDetailPage() {
               voteWeightExceedsBalance ||
               voteWeightInvalid ||
               noPowerForDelegated ||
-              (votePowerSource === "Snapshot" && (snapshotPower === undefined || snapshotPower === 0n))
+              (votePowerSource === "Snapshot" && (snapshotPower === undefined || snapshotPower === 0n)) ||
+              (votePowerSource === "Balance" && (balance === undefined || balance < BigInt(100 * 1e18)))
             }
           >
             {(votePending || voteConfirming) ? (
