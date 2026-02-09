@@ -41,6 +41,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     error InvalidDelegation();
     error ProposalExpired();
     error NotCancelable();
+    error ProposalNotActive();
 
     enum ProposalState {
         Pending,
@@ -485,6 +486,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
         _updateProposalState(proposalId);
 
+        if (p.state != ProposalState.Active) revert ProposalNotActive();
         if (block.timestamp < p.startTime) revert VotingNotStarted();
         if (block.timestamp >= p.endTime) revert VotingEnded();
         if (!_isValidOption(p, option)) revert InvalidOption();

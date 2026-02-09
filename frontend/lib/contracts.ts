@@ -2,7 +2,7 @@ export const CHAIN_ID = 11155111; // Sepolia
 
 export const CONTRACTS = {
   token: {
-    address: "0xC3a1bb1241306F2Bb94a897d6855458aae2f04A7" as const,
+    address: "0x6DA44d94412948Cc97e4d7E93f7132cE7857Ee75" as const,
     abi: [
       {
         inputs: [
@@ -60,7 +60,7 @@ export const CONTRACTS = {
     ] as const,
   },
   voting: {
-    address: "0x5CF1c6dc36769E57BaF9ACb0B2e298eD8B7D171e" as const,
+    address: "0x5EaEDc638d6C97B2DF1BbFf290afcFE18b72faFb" as const,
     abi: [
       {
         inputs: [],
@@ -352,7 +352,7 @@ export const CONTRACTS = {
     ] as const,
   },
   target: {
-    address: "0x0b0fB678530557C82cd2284aC77881da852D9D23" as const,
+    address: "0x7B033F59b8F70eB9FA45E71836e61FFbE54F75aB" as const,
   },
 } as const;
 

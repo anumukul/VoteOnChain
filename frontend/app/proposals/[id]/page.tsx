@@ -202,9 +202,12 @@ export default function ProposalDetailPage() {
   const now = Math.floor(Date.now() / 1000);
   const votingStarted = now >= Number(startTime);
   const votingEnded = now >= Number(endTime);
+  const stateNum = Number(state);
+  const isActive = stateNum === 1;
   const canVote = Boolean(
     isConnected &&
     address &&
+    isActive &&
     votingStarted &&
     !votingEnded &&
     voterInfo &&
@@ -212,8 +215,6 @@ export default function ProposalDetailPage() {
     balance !== undefined &&
     balance >= BigInt(100 * 1e18)
   );
-
-  const stateNum = Number(state);
   const { displayStateNum, displayLabel: stateLabel } = getProposalDisplayState(
     startTime,
     endTime,
