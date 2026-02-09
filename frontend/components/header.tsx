@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
-import { Vote, LayoutDashboard, PlusCircle } from "lucide-react";
+import { Vote, LayoutDashboard, PlusCircle, Users } from "lucide-react";
 
 export function Header() {
   return (
@@ -31,6 +31,12 @@ export function Header() {
             <Link href="/create" className="flex items-center gap-2">
               <PlusCircle className="h-4 w-4" />
               Create
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/delegate" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Delegation
             </Link>
           </Button>
           <ConnectButton

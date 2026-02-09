@@ -5,7 +5,7 @@ import { useReadContract } from "wagmi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CONTRACTS, PROPOSAL_STATES } from "@/lib/contracts";
-import { formatAddress, formatTokenAmount } from "@/lib/utils";
+import { formatAddress, formatTokenAmount, getProposalDisplayState } from "@/lib/utils";
 import { FileText } from "lucide-react";
 
 export default function ProposalsPage() {
@@ -76,22 +76,29 @@ function ProposalRow({ proposalId }: { proposalId: `0x${string}` }) {
     options,
     executed,
     totalVotes,
+    resultsCalculated,
     ,
     ,
-    ,
-    ,
-    ,
+    timeLockDuration,
+    executionDeadline,
     state,
   ] = data;
 
   const stateNum = Number(state);
-  const stateLabel = PROPOSAL_STATES[stateNum] ?? "Unknown";
+  const { displayStateNum, displayLabel: stateLabel } = getProposalDisplayState(
+    startTime,
+    endTime,
+    executionDeadline,
+    resultsCalculated,
+    stateNum,
+    Boolean(executed)
+  );
   const stateVariant =
-    stateNum === 1
+    displayStateNum === 1
       ? "warning"
-      : stateNum === 3 || stateNum === 4
+      : displayStateNum === 3 || displayStateNum === 4
         ? "success"
-        : stateNum === 2 || stateNum === 5 || stateNum === 6
+        : displayStateNum === 2 || displayStateNum === 5 || displayStateNum === 6
           ? "destructive"
           : "secondary";
 

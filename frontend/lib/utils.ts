@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { PROPOSAL_STATES } from "./contracts";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,4 +24,29 @@ export function formatDate(timestamp: bigint): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+/** Derive display state from proposal data so status updates automatically (no need to call calculateResults for UI). */
+export function getProposalDisplayState(
+  startTime: bigint,
+  endTime: bigint,
+  executionDeadline: bigint,
+  resultsCalculated: boolean,
+  state: number,
+  executed: boolean
+): { displayStateNum: number; displayLabel: string } {
+  const now = Math.floor(Date.now() / 1000);
+  const start = Number(startTime);
+  const end = Number(endTime);
+  const deadline = Number(executionDeadline);
+
+  if (executed) return { displayStateNum: 4, displayLabel: PROPOSAL_STATES[4]! };
+  if (state === 5) return { displayStateNum: 5, displayLabel: PROPOSAL_STATES[5]! };
+  if (state === 0 && now < start) return { displayStateNum: 0, displayLabel: PROPOSAL_STATES[0]! };
+  if (state === 0 && now >= start) return { displayStateNum: 1, displayLabel: PROPOSAL_STATES[1]! };
+  if (state === 1 && now >= end && !resultsCalculated)
+    return { displayStateNum: 1, displayLabel: "Voting ended" };
+  if (state === 1) return { displayStateNum: 1, displayLabel: PROPOSAL_STATES[1]! };
+  if (state === 3 && now > deadline) return { displayStateNum: 6, displayLabel: PROPOSAL_STATES[6]! };
+  return { displayStateNum: state, displayLabel: PROPOSAL_STATES[state] ?? "Unknown" };
 }

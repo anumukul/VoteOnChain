@@ -125,6 +125,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
 
     mapping(address => DelegationInfo) public delegations;
     mapping(address => uint256) public delegationNonces;
+    mapping(address => uint256) public delegatedPowerUsed;
 
     bytes32[] public allProposals;
     mapping(bytes32 => address[]) public proposalVoters;
@@ -379,7 +380,9 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             block.timestamp < p.startTime
         ) {
             uint256 balance = votingToken.balanceOf(voter);
-            uint256 delegatedPower = delegations[voter].totalDelegatedPower;
+            uint256 totalDel = delegations[voter].totalDelegatedPower;
+            uint256 usedDel = delegatedPowerUsed[voter];
+            uint256 delegatedPower = usedDel < totalDel ? totalDel - usedDel : 0;
             uint256 totalPower = balance + delegatedPower;
 
             votingPowerSnapshot[proposalId][voter] = totalPower;
@@ -443,7 +446,13 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             uint256 amount = delegation.delegatedAmount;
 
             DelegationInfo storage delegateInfo = delegations[currentDelegate];
+            uint256 total = delegateInfo.totalDelegatedPower;
+            uint256 used = delegatedPowerUsed[currentDelegate];
+            uint256 available = used < total ? total - used : 0;
+            uint256 refundAmount = amount <= available ? amount : available;
+
             delegateInfo.totalDelegatedPower -= amount;
+            delegatedPowerUsed[currentDelegate] = used >= amount ? used - amount : 0;
 
             for (uint i = 0; i < delegateInfo.delegators.length; i++) {
                 if (delegateInfo.delegators[i] == delegator) {
@@ -455,7 +464,7 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
                 }
             }
 
-            if (!votingToken.transfer(delegator, amount)) {
+            if (refundAmount > 0 && !votingToken.transfer(delegator, refundAmount)) {
                 revert TokenTransferFailed();
             }
 
@@ -521,6 +530,10 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         proposalVoters[proposalId].push(msg.sender);
         proposalVoterCount[proposalId]++;
 
+        if (powerSource == VotingPowerSource.Delegated) {
+            delegatedPowerUsed[msg.sender] += voteWeight;
+        }
+
         emit VoteCast(proposalId, msg.sender, voteWeight, option, powerSource);
     }
 
@@ -538,7 +551,9 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
             takeSnapshot(proposalId, voter);
             availablePower = votingPowerSnapshot[proposalId][voter];
         } else if (powerSource == VotingPowerSource.Delegated) {
-            availablePower = delegations[voter].totalDelegatedPower;
+            uint256 total = delegations[voter].totalDelegatedPower;
+            uint256 used = delegatedPowerUsed[voter];
+            availablePower = used < total ? total - used : 0;
         }
 
         if (requestedWeight > 0) {
@@ -552,8 +567,6 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
     function withdrawLockedTokens(
         bytes32 proposalId
     ) external nonReentrant proposalExists(proposalId) {
-        Proposal storage p = proposals[proposalId];
-
         if (!_isProposalResolved(proposalId)) revert ProposalNotResolved();
 
         uint256 amount = lockedTokens[proposalId][msg.sender];
@@ -896,12 +909,15 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         )
     {
         Voter storage v = votes[proposalId][voter];
+        uint256 totalDel = delegations[voter].totalDelegatedPower;
+        uint256 usedDel = delegatedPowerUsed[voter];
+        uint256 availableDelegated = usedDel < totalDel ? totalDel - usedDel : 0;
         return (
             v.hasVoted,
             v.weight,
             v.votedOption,
             votingPowerSnapshot[proposalId][voter],
-            delegations[voter].totalDelegatedPower
+            availableDelegated
         );
     }
 
@@ -938,7 +954,9 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         bytes32 proposalId
     ) external view returns (uint256) {
         uint256 balance = votingToken.balanceOf(user);
-        uint256 delegated = delegations[user].totalDelegatedPower;
+        uint256 totalDel = delegations[user].totalDelegatedPower;
+        uint256 usedDel = delegatedPowerUsed[user];
+        uint256 delegated = usedDel < totalDel ? totalDel - usedDel : 0;
         uint256 snapshot = votingPowerSnapshot[proposalId][user];
 
         return balance + delegated + snapshot;

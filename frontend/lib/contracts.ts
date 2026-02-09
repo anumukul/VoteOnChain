@@ -2,7 +2,7 @@ export const CHAIN_ID = 11155111; // Sepolia
 
 export const CONTRACTS = {
   token: {
-    address: "0xe1267DBA9e3E3749aAF1eFfbC3C4D409f4CbF7Bf" as const,
+    address: "0xC3a1bb1241306F2Bb94a897d6855458aae2f04A7" as const,
     abi: [
       {
         inputs: [
@@ -47,10 +47,20 @@ export const CONTRACTS = {
         stateMutability: "nonpayable",
         type: "function",
       },
+      {
+        inputs: [
+          { name: "to", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+        name: "mint",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
     ] as const,
   },
   voting: {
-    address: "0xF51F3bD4C08b510e704058694AD59B690784055F" as const,
+    address: "0x5CF1c6dc36769E57BaF9ACb0B2e298eD8B7D171e" as const,
     abi: [
       {
         inputs: [],
@@ -69,6 +79,13 @@ export const CONTRACTS = {
       {
         inputs: [],
         name: "votingToken",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "owner",
         outputs: [{ name: "", type: "address" }],
         stateMutability: "view",
         type: "function",
@@ -217,10 +234,125 @@ export const CONTRACTS = {
         stateMutability: "nonpayable",
         type: "function",
       },
+      {
+        inputs: [{ name: "user", type: "address" }],
+        name: "getDelegationInfo",
+        outputs: [
+          { name: "delegateAddress", type: "address" },
+          { name: "delegatedAmount", type: "uint256" },
+          { name: "delegators", type: "address[]" },
+          { name: "totalDelegatedPower", type: "uint256" },
+        ],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [{ name: "", type: "address" }],
+        name: "delegationNonces",
+        outputs: [{ name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [{ name: "delegate", type: "address" }],
+        name: "delegatedPowerUsed",
+        outputs: [{ name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "", type: "bytes32" },
+          { name: "", type: "address" },
+        ],
+        name: "votingPowerSnapshot",
+        outputs: [{ name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "proposalId", type: "bytes32" },
+          { name: "voter", type: "address" },
+        ],
+        name: "takeSnapshot",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "proposalId", type: "bytes32" },
+          { name: "voters", type: "address[]" },
+        ],
+        name: "batchSnapshot",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "to", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+        ],
+        name: "delegateVotingPower",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "revokeDelegation",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "proposalId", type: "bytes32" },
+          { name: "reason", type: "string" },
+        ],
+        name: "cancelProposal",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "proposalId", type: "bytes32" },
+          { name: "reason", type: "string" },
+        ],
+        name: "emergencyCancel",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "pause",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "unpause",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "paused",
+        outputs: [{ name: "", type: "bool" }],
+        stateMutability: "view",
+        type: "function",
+      },
     ] as const,
   },
   target: {
-    address: "0xC799F442F85D4d28DA377342F30C39041b9c102A" as const,
+    address: "0x0b0fB678530557C82cd2284aC77881da852D9D23" as const,
   },
 } as const;
 

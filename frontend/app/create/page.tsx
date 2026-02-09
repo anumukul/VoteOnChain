@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, decodeErrorResult, type BaseError } from "viem";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,16 @@ import { Loader2, PlusCircle, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const DEFAULT_OPTIONS = [1, 2, 3];
+
+const VOTING_ERRORS_ABI = [
+  { type: "error" as const, name: "InvalidTimeRange", inputs: [] },
+  { type: "error" as const, name: "InsufficientTokensToCreate", inputs: [] },
+  { type: "error" as const, name: "DescriptionRequired", inputs: [] },
+  { type: "error" as const, name: "InsufficientOptions", inputs: [] },
+  { type: "error" as const, name: "DuplicateOptions", inputs: [] },
+  { type: "error" as const, name: "ProposalAlreadyExists", inputs: [] },
+] as const;
+
 const TARGET_ABI = [
   {
     inputs: [{ name: "_value", type: "uint256" }],
@@ -84,7 +94,11 @@ export default function CreateProposalPage() {
     if (!canCreate || !address) return;
 
     const now = Math.floor(Date.now() / 1000);
-    const startTime = now + Number(startInHours) * 3600;
+    const startInSeconds =
+      Number(startInHours) > 0
+        ? Number(startInHours) * 3600
+        : 60;
+    const startTime = now + startInSeconds;
     const endTime = startTime + Number(durationDays) * 86400;
 
     const target = useTarget && targetValue ? CONTRACTS.target.address : "0x0000000000000000000000000000000000000000";
@@ -113,6 +127,7 @@ export default function CreateProposalPage() {
           0n,
           0n,
         ],
+        gas: 1_500_000n,
       },
       {
         onSuccess: () => {
@@ -184,9 +199,15 @@ export default function CreateProposalPage() {
                 id="start"
                 type="number"
                 min={0}
+                placeholder="0 = start in ~1 min"
                 value={startInHours}
                 onChange={(e) => setStartInHours(e.target.value)}
               />
+              {Number(startInHours) === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Voting will start ~1 minute after creation so the transaction can confirm.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="duration">Duration (days)</Label>
@@ -195,9 +216,15 @@ export default function CreateProposalPage() {
                 type="number"
                 min={1}
                 max={30}
+                placeholder="Min 1 day"
                 value={durationDays}
                 onChange={(e) => setDurationDays(e.target.value)}
               />
+              {Number(durationDays) < 1 && durationDays !== "" && (
+                <p className="text-xs text-destructive">
+                  Minimum duration is 1 day
+                </p>
+              )}
             </div>
           </div>
 
@@ -268,10 +295,42 @@ export default function CreateProposalPage() {
           </Button>
 
           {error && (
-            <p className="text-sm text-destructive">{error.message}</p>
+            <RevertMessage error={error} />
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function RevertMessage({ error }: { error: Error & { cause?: unknown; data?: `0x${string}` } }) {
+  let message = error.message;
+  let hint = "";
+
+  try {
+    const cause = (error as BaseError).cause as
+      | { data?: `0x${string}`; errorName?: string }
+      | undefined;
+    const data = cause?.data ?? error.data;
+    if (data && typeof data === "string" && data.startsWith("0x") && data.length > 10) {
+      const decoded = decodeErrorResult({ abi: VOTING_ERRORS_ABI, data: data as `0x${string}` });
+      message = `Contract reverted: ${decoded.errorName}`;
+      if (decoded.errorName === "InvalidTimeRange") {
+        hint = "Use “Voting starts in” at least 1 hour, or refresh and try again (we now use at least 1 second in the future).";
+      } else if (decoded.errorName === "InsufficientTokensToCreate") {
+        hint = "Your GOV balance must be at least 100 GOV (on the token contract on Sepolia).";
+      } else if (decoded.errorName === "DuplicateOptions") {
+        hint = "Remove duplicate option values so each option is unique.";
+      } else if (decoded.errorName === "InsufficientOptions") {
+        hint = "You need at least 2 options.";
+      }
+    }
+  } catch {}
+
+  return (
+    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+      <p className="font-medium">{message}</p>
+      {hint && <p className="mt-1 text-destructive/90">{hint}</p>}
     </div>
   );
 }

@@ -1,17 +1,30 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useReadContract } from "wagmi";
+import { parseEther } from "viem";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CONTRACTS, PROPOSAL_STATES } from "@/lib/contracts";
-import { formatAddress, formatTokenAmount } from "@/lib/utils";
-import { Vote, Coins, FileText, ArrowRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CONTRACTS, PROPOSAL_STATES, CHAIN_ID } from "@/lib/contracts";
+import { formatAddress, formatTokenAmount, getProposalDisplayState } from "@/lib/utils";
+import { Vote, Coins, FileText, ArrowRight, Loader2 } from "lucide-react";
 
 export default function HomePage() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const queryClient = useQueryClient();
+  const [mintToAddress, setMintToAddress] = useState("");
+  const [mintAmount, setMintAmount] = useState("1000");
+
+  const { writeContract: mintWrite, data: mintHash, isPending: mintPending, error: mintError } = useWriteContract();
+  const { isLoading: mintConfirming } = useWaitForTransactionReceipt({ hash: mintHash });
+  const isSepolia = chainId === CHAIN_ID;
 
   const { data: balance } = useReadContract({
     address: CONTRACTS.token.address,
@@ -43,6 +56,26 @@ export default function HomePage() {
     abi: CONTRACTS.voting.abi,
     functionName: "defaultQuorum",
   });
+
+  const { data: votingOwner } = useReadContract({
+    address: CONTRACTS.voting.address,
+    abi: CONTRACTS.voting.abi,
+    functionName: "owner",
+  });
+
+  const { data: paused } = useReadContract({
+    address: CONTRACTS.voting.address,
+    abi: CONTRACTS.voting.abi,
+    functionName: "paused",
+  });
+
+  const { writeContract: pauseWrite, isPending: pausePending } = useWriteContract();
+  const { writeContract: unpauseWrite, isPending: unpausePending } = useWriteContract();
+
+  const isVotingOwner =
+    address &&
+    votingOwner &&
+    address.toLowerCase() === votingOwner.toLowerCase();
 
   const recentIds = proposalIds && proposalIds.length > 0
     ? proposalIds.slice(-5).reverse()
@@ -121,6 +154,135 @@ export default function HomePage() {
         </section>
       )}
 
+      {isConnected && isVotingOwner && (
+        <section>
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardHeader>
+              <CardTitle className="text-base">Contract owner</CardTitle>
+              <CardDescription>
+                Pause or unpause the voting contract. When paused, no one can create proposals or vote; only emergency cancel is allowed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {paused ? (
+                <Button
+                  variant="default"
+                  onClick={() =>
+                    unpauseWrite(
+                      {
+                        address: CONTRACTS.voting.address,
+                        abi: CONTRACTS.voting.abi,
+                        functionName: "unpause",
+                        gas: 100_000n,
+                      },
+                      { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["readContract"] }) }
+                    )
+                  }
+                  disabled={unpausePending}
+                >
+                  {unpausePending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Unpause
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  onClick={() =>
+                    pauseWrite(
+                      {
+                        address: CONTRACTS.voting.address,
+                        abi: CONTRACTS.voting.abi,
+                        functionName: "pause",
+                        gas: 100_000n,
+                      },
+                      { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["readContract"] }) }
+                    )
+                  }
+                  disabled={pausePending}
+                >
+                  {pausePending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Pause contract
+                </Button>
+              )}
+              <span className="text-sm text-muted-foreground self-center">
+                {paused ? "Contract is paused." : "Contract is active."}
+              </span>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {isConnected && isSepolia && (
+        <section>
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Coins className="h-4 w-4" />
+                Mint test GOV (testnet only)
+              </CardTitle>
+              <CardDescription>
+                GOV is a mock token on Sepolia. Anyone can mint to any address for testing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:flex sm:items-end">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="mint-to">Recipient address</Label>
+                  <Input
+                    id="mint-to"
+                    placeholder="0x..."
+                    value={mintToAddress}
+                    onChange={(e) => setMintToAddress(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="w-32 space-y-1">
+                  <Label htmlFor="mint-amount">Amount (GOV)</Label>
+                  <Input
+                    id="mint-amount"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="1000"
+                    value={mintAmount}
+                    onChange={(e) => setMintAmount(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    try {
+                      const to = mintToAddress.trim() as `0x${string}`;
+                      if (!to || !to.startsWith("0x") || to.length < 42) return;
+                      const amount = parseEther(mintAmount.trim() || "0");
+                      if (amount === 0n) return;
+                      mintWrite(
+                        {
+                          address: CONTRACTS.token.address,
+                          abi: CONTRACTS.token.abi,
+                          functionName: "mint",
+                          args: [to, amount],
+                          gas: 100_000n,
+                        },
+                        { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["readContract"] }) }
+                      );
+                    } catch {}
+                  }}
+                  disabled={
+                    !mintToAddress.trim().startsWith("0x") ||
+                    mintToAddress.trim().length < 42 ||
+                    !mintAmount.trim() ||
+                    mintPending ||
+                    mintConfirming
+                  }
+                >
+                  {(mintPending || mintConfirming) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Mint GOV
+                </Button>
+              </div>
+              {mintError && <p className="text-sm text-destructive">{mintError.message}</p>}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold">Recent proposals</h2>
@@ -179,18 +341,25 @@ function ProposalCard({ proposalId }: { proposalId: `0x${string}` }) {
     ,
     ,
     ,
-    ,
+    executionDeadline,
     state,
   ] = data;
 
   const stateNum = Number(state);
-  const stateLabel = PROPOSAL_STATES[stateNum] ?? "Unknown";
+  const { displayStateNum, displayLabel: stateLabel } = getProposalDisplayState(
+    startTime,
+    endTime,
+    executionDeadline,
+    resultsCalculated,
+    stateNum,
+    Boolean(executed)
+  );
   const stateVariant =
-    stateNum === 1
+    displayStateNum === 1
       ? "warning"
-      : stateNum === 3 || stateNum === 4
+      : displayStateNum === 3 || displayStateNum === 4
         ? "success"
-        : stateNum === 2 || stateNum === 5 || stateNum === 6
+        : displayStateNum === 2 || displayStateNum === 5 || displayStateNum === 6
           ? "destructive"
           : "secondary";
 
