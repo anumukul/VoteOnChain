@@ -738,6 +738,14 @@ contract VotingSystem is Ownable, ReentrancyGuard, Pausable {
         emit ProposalExecuted(proposalId, msg.sender, success, returnData);
     }
 
+    function pause() external onlyOwner whenNotPaused {
+        _pause();
+    }
+
+    function unpause() external onlyOwner whenPaused {
+        _unpause();
+    }
+
     function emergencyCancel(
         bytes32 proposalId,
         string calldata reason
